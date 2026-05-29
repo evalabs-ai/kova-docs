@@ -1,0 +1,318 @@
+{
+  "components": {
+    "schemas": {
+      "AudioResponseFormat": {
+        "additionalProperties": false,
+        "properties": {
+          "bitrate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bitrate"
+          },
+          "encoding": {
+            "default": "mp3",
+            "title": "Encoding",
+            "type": "string"
+          },
+          "sample_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Rate"
+          }
+        },
+        "title": "AudioResponseFormat",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "SyncTTSResponse": {
+        "properties": {
+          "audio": {
+            "title": "Audio",
+            "type": "string"
+          },
+          "timestamps": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncTimestamps"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "audio"
+        ],
+        "title": "SyncTTSResponse",
+        "type": "object"
+      },
+      "SyncTimestamps": {
+        "properties": {
+          "end_seconds": {
+            "items": {
+              "type": "number"
+            },
+            "title": "End Seconds",
+            "type": "array"
+          },
+          "start_seconds": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Start Seconds",
+            "type": "array"
+          },
+          "words": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Words",
+            "type": "array"
+          }
+        },
+        "required": [
+          "words",
+          "start_seconds",
+          "end_seconds"
+        ],
+        "title": "SyncTimestamps",
+        "type": "object"
+      },
+      "TTSRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "normalize_text": {
+            "default": false,
+            "title": "Normalize Text",
+            "type": "boolean"
+          },
+          "response_format": {
+            "$ref": "#/components/schemas/AudioResponseFormat"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "timestamps": {
+            "default": false,
+            "title": "Timestamps",
+            "type": "boolean"
+          },
+          "voice": {
+            "title": "Voice",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "voice"
+        ],
+        "title": "TTSRequest",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "xApiKey": {
+        "in": "header",
+        "name": "x-api-key",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "title": "Kova TTS Inference API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/tts": {
+      "post": {
+        "operationId": "sync_tts__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TTSRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncTTSResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "xApiKey": []
+          }
+        ],
+        "summary": "Text to speech"
+      }
+    },
+    "/v1/tts/speakers": {
+      "get": {
+        "operationId": "list_speakers_speakers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "xApiKey": []
+          }
+        ],
+        "summary": "List voices"
+      }
+    },
+    "/v1/tts/stream": {
+      "post": {
+        "operationId": "stream_tts_stream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TTSRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "xApiKey": []
+          }
+        ],
+        "summary": "Streaming text to speech"
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.kova.ai"
+    }
+  ]
+}
