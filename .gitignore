@@ -1,0 +1,11 @@
+# Mintlify
+.mintlify/
+
+# Editor / OS
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# Node (Mintlify CLI installs into node_modules locally for dev)
+node_modules/

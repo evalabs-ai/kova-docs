@@ -1,0 +1,66 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Kova",
+  "logo": {
+    "dark": "/logo/kova-logo-white.svg",
+    "light": "/logo/kova-logo-black.svg",
+    "href": "https://kova.ai"
+  },
+  "favicon": "/logo/kova-logo-notext-black.svg",
+  "colors": {
+    "primary": "#0f8f86",
+    "light": "#c8e4df",
+    "dark": "#08453f",
+    "anchors": {
+      "from": "#0f8f86",
+      "to": "#0b746c"
+    }
+  },
+  "topbarCtaButton": {
+    "name": "Get API key",
+    "url": "https://platform.kova.ai/dashboard/api-keys"
+  },
+  "topbarLinks": [
+    {
+      "name": "Dashboard",
+      "url": "https://platform.kova.ai/dashboard"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Get started",
+      "pages": ["overview", "quickstart", "authentication"]
+    },
+    {
+      "group": "HTTP API",
+      "pages": [
+        "api-reference/http/text-to-speech",
+        "api-reference/http/streaming-tts"
+      ]
+    },
+    {
+      "group": "WebSocket API",
+      "pages": [
+        "api-reference/websocket/overview",
+        "api-reference/websocket/frames",
+        "api-reference/websocket/examples/streaming-long-doc"
+      ]
+    },
+    {
+      "group": "Voices",
+      "pages": ["voices"]
+    },
+    {
+      "group": "SDKs",
+      "pages": ["sdks/python", "sdks/javascript"]
+    },
+    {
+      "group": "Reference",
+      "pages": ["errors", "rate-limits"]
+    }
+  ],
+  "openapi": ["api-reference/openapi.json"],
+  "footerSocials": {
+    "website": "https://kova.ai"
+  }
+}
