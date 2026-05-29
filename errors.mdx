@@ -94,7 +94,7 @@ try {
   await client.tts({ text: "hi", voice: "cal" });
 } catch (e) {
   if (e instanceof KovaTTSError) {
-    console.log(e.statusCode, e.body);
+    console.log(e.status, e.body);
   }
 }
 ```
