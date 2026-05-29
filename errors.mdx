@@ -1,6 +1,104 @@
 ---
 title: "Errors"
-description: "Stub page. Real content lands in a later phase."
+description: "The actual response body shapes for every error code you'll see."
 ---
 
-(placeholder)
+Kova returns JSON error bodies. The HTTP status code is the primary signal; the JSON body contains an `error` field and, in some cases, additional context.
+
+## 401 Unauthorized
+
+There are two distinct 401 shapes depending on where the request was rejected.
+
+**Missing or malformed API key** (rejected at the gateway middleware):
+
+```json
+{"error": "Invalid or missing API key"}
+```
+
+**Well-formed key but unknown / revoked** (rejected at the platform's billing service):
+
+```json
+{"error": "INVALID_API_KEY"}
+```
+
+**Cause:** The `x-api-key` header is missing, doesn't start with `kova_sk_`, or no longer exists in the platform's key store.
+
+**Fix:** Verify the header is present, check for typos, regenerate the key on [Dashboard → API keys](https://platform.kova.ai/dashboard/api-keys).
+
+## 402 Payment Required
+
+```json
+{"error": "INSUFFICIENT_CREDITS"}
+```
+
+**Cause:** The account associated with the key has run out of credit.
+
+**Fix:** Top up at [Dashboard → Billing](https://platform.kova.ai/dashboard/billing). Once credits land, requests resume immediately — no need to regenerate the key.
+
+## 422 Unprocessable Entity
+
+```json
+{
+  "detail": [
+    {
+      "type": "missing",
+      "loc": ["body", "voice"],
+      "msg": "Field required",
+      "input": {"text": "hello"}
+    }
+  ]
+}
+```
+
+**Cause:** Request body failed validation. Common causes:
+- Missing required field (`text`, `voice`).
+- Invalid `response_format.encoding` (must be one of `mp3`, `pcm`, `wav`, `linear16`, `opus`, `mulaw`, `alaw`).
+- Invalid `response_format.sample_rate` for the chosen encoding (e.g. `opus` requires one of 8000, 12000, 16000, 24000, 48000).
+- Invalid `response_format.bitrate` (must be in the encoding's accepted range; see [Text to speech](/api-reference/http/text-to-speech)).
+
+**Fix:** Inspect the `loc` and `msg` to find the offending field. The `detail` array can contain multiple validation errors.
+
+## 429 Too Many Requests
+
+```json
+{"error": "RATE_LIMITED", "detail": "concurrency limit reached"}
+```
+
+**Cause:** Your key has 10 in-flight requests already (the per-key concurrency limit). The server is also bounded by a global semaphore (`MAX_CONCURRENT_TTS=15` by default) — under heavy load this can surface as well.
+
+**Fix:** Wait for an in-flight request to complete, or queue requests client-side. See [Rate limits](/rate-limits) for the full policy.
+
+## 5xx Server Errors
+
+Transient. The SDK retries 5xx responses automatically with exponential backoff. If you see persistent 500s, [contact support](mailto:support@kova.ai) with the request id from the `x-request-id` response header.
+
+## How errors surface in the SDKs
+
+<CodeGroup>
+
+```python Python
+from kova_tts import KovaTTSClient, KovaTTSError
+
+client = KovaTTSClient(api_key="kova_sk_...")
+try:
+    result = client.tts(text="hi", voice="cal")
+except KovaTTSError as e:
+    print(e.status_code, e.body)  # e.g. 401 {'error': 'Invalid or missing API key'}
+```
+
+```ts Node.js
+import { KovaTTSClient, KovaTTSError } from "@kova-ai/tts";
+
+const client = new KovaTTSClient({ apiKey: "kova_sk_..." });
+try {
+  await client.tts({ text: "hi", voice: "cal" });
+} catch (e) {
+  if (e instanceof KovaTTSError) {
+    console.log(e.statusCode, e.body);
+  }
+}
+```
+
+</CodeGroup>
+
+> The SDKs also export `KovaTTSAuthError` (401), `KovaTTSRateLimitError` (429), `KovaTTSValidationError` (422), `KovaTTSServerError` (5xx), `KovaTTSConnectionError`, and `KovaTTSProtocolError`. Catch the base `KovaTTSError` to handle everything; catch the specific subclasses when you need to react differently per code.

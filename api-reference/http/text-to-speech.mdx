@@ -1,6 +1,79 @@
 ---
 title: "Text to speech"
-description: "Stub page. Real content lands in a later phase."
+description: "Synchronous TTS. Returns base64-encoded audio after generation completes."
+openapi: "POST /v1/tts"
 ---
 
-(placeholder)
+`POST /v1/tts` is the simplest way to generate audio: send text, get a complete audio file back as base64. Use this when you have a single utterance and want to write the result to a file or play it back after generation completes.
+
+If you need to start playback before generation finishes, use [Streaming TTS](/api-reference/http/streaming-tts) instead.
+
+## Examples
+
+<CodeGroup>
+
+```python Python
+from kova_tts import KovaTTSClient, AudioResponseFormat
+
+client = KovaTTSClient(api_key="kova_sk_...")
+result = client.tts(
+    text="Welcome to Kova.",
+    voice="cal",
+    response_format=AudioResponseFormat(encoding="mp3"),
+    timestamps=True,
+)
+client.write_audio_file(result.audio, "welcome.mp3")
+if result.timestamps:
+    print(result.timestamps.words)
+```
+
+```ts Node.js
+import { KovaTTSClient } from "@kova-ai/tts";
+
+const client = new KovaTTSClient({ apiKey: "kova_sk_..." });
+const result = await client.tts({
+  text: "Welcome to Kova.",
+  voice: "cal",
+  response_format: { encoding: "mp3" },
+  timestamps: true,
+});
+await client.writeAudioFile(result.audio, "welcome.mp3");
+console.log(result.timestamps?.words);
+```
+
+```bash cURL
+curl https://api.kova.ai/v1/tts \
+  -H "x-api-key: $KOVA_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{
+    "text": "Welcome to Kova.",
+    "voice": "cal",
+    "response_format": {"encoding": "mp3"},
+    "timestamps": true
+  }' \
+  | jq -r .audio | base64 -d > welcome.mp3
+```
+
+</CodeGroup>
+
+## response_format
+
+`response_format` accepts an object or, for backward compatibility, a bare encoding string (e.g. `"mp3"`).
+
+| encoding | sample_rate | bitrate | Notes |
+|---|---|---|---|
+| `mp3` (default) | 16000–48000 Hz (default 32000) | `32–320 kbps` (default `128k`) | Compressed; best general-purpose default. |
+| `wav` | 8000–48000 Hz (default 32000) | n/a | Uncompressed; one header per file. |
+| `pcm` | 8000–48000 Hz (default 32000) | n/a | Raw signed 16-bit little-endian. Best for streaming if you assemble your own header. |
+| `linear16` | 8000–48000 Hz (default 32000) | n/a | Equivalent to `pcm` but emits a WAV header per chunk during streaming. |
+| `opus` | one of 8000, 12000, 16000, 24000, 48000 (default 48000) | `32–192 kbps` (default `64k`) | Compressed, low-latency. |
+| `mulaw` | 8000 Hz only | n/a | Telephony (G.711). |
+| `alaw` | 8000 Hz only | n/a | Telephony (G.711). |
+
+<Tip>Encoding aliases are accepted and normalized: `linear_pcm` / `linear-pcm` / `pcm_s16le` / `raw` / `mu-law` / `μ-law` / `ulaw` / `u-law` / `a-law`. Documented names are canonical.</Tip>
+
+## See also
+
+- [Streaming TTS](/api-reference/http/streaming-tts) — same request shape, lower time-to-first-audio.
+- [Voices](/voices) — available speaker ids.
+- [Errors](/errors) — what 4xx and 5xx bodies look like.

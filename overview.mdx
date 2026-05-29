@@ -1,6 +1,31 @@
 ---
 title: "Overview"
-description: "Stub page. Real content lands in a later phase."
+description: "What Kova TTS is and how to choose between sync, streaming, and WebSocket."
 ---
 
-(placeholder)
+Kova TTS is a low-latency text-to-speech API. You send text and a voice id; you get high-quality audio back. The API is available over three transports:
+
+| Transport | When to use | Time to first audio |
+|---|---|---|
+| **Sync HTTP** (`POST /v1/tts`) | One-shot generation, batch jobs, when you want a single audio file at the end | Total generation time |
+| **Streaming HTTP** (`POST /v1/tts/stream`) | Playing audio as it's generated for a single utterance | First audio chunk in ~200ms |
+| **WebSocket** (`WS /v1/tts/ws`) | Interactive applications (voice agents, dialog systems) — feed text incrementally, generate multiple utterances over one connection | First audio chunk in ~200ms; subsequent utterances reuse the warm connection |
+
+All three transports share the same voice catalog, the same authentication (`x-api-key` header), and the same billing.
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="play" href="/quickstart">
+    Make your first request in under a minute with the Python SDK.
+  </Card>
+  <Card title="WebSocket API" icon="bolt" href="/api-reference/websocket/overview">
+    Build real-time, interactive voice experiences over a single connection.
+  </Card>
+  <Card title="SDKs" icon="cube" href="/sdks/python">
+    Official Python and JavaScript clients.
+  </Card>
+  <Card title="Voices" icon="microphone" href="/voices">
+    Browse available speakers.
+  </Card>
+</CardGroup>

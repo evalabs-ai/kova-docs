@@ -1,6 +1,58 @@
 ---
 title: "Voices"
-description: "Stub page. Real content lands in a later phase."
+description: "Browse available speakers."
+openapi: "GET /v1/tts/speakers"
 ---
 
-(placeholder)
+Pass any `speaker_ids` value from `GET /v1/tts/speakers` as the `voice` field in your TTS requests. New voices are added regularly.
+
+<Tip>The voice catalog is live — always call `/v1/tts/speakers` at startup rather than hardcoding ids.</Tip>
+
+## Example
+
+<CodeGroup>
+
+```python Python
+import os, httpx
+
+resp = httpx.get(
+    "https://api.kova.ai/v1/tts/speakers",
+    headers={"x-api-key": os.environ["KOVA_API_KEY"]},
+)
+resp.raise_for_status()
+print(resp.json()["speaker_ids"])
+```
+
+```ts Node.js
+const resp = await fetch("https://api.kova.ai/v1/tts/speakers", {
+  headers: { "x-api-key": process.env.KOVA_API_KEY! },
+});
+const { speaker_ids } = await resp.json();
+console.log(speaker_ids);
+```
+
+```bash cURL
+curl https://api.kova.ai/v1/tts/speakers \
+  -H "x-api-key: $KOVA_API_KEY"
+```
+
+</CodeGroup>
+
+> The SDKs do not currently expose a `list_voices` / `listVoices` convenience method. Use raw HTTP as above. If a helper is added in a future SDK release, this page should be updated to prefer it.
+
+## Picking a voice
+
+Different voices have different character — accent, age, energy. The best way to pick is to listen.
+
+Try the same text through several voices:
+
+```python
+from kova_tts import KovaTTSClient, AudioResponseFormat
+
+client = KovaTTSClient(api_key="kova_sk_...")
+voices_to_try = ["cal", "michaela"]  # adjust to match /v1/tts/speakers output
+for voice in voices_to_try:
+    result = client.tts(text="Welcome to Kova.", voice=voice,
+                        response_format=AudioResponseFormat(encoding="mp3"))
+    client.write_audio_file(result.audio, f"sample-{voice}.mp3")
+```

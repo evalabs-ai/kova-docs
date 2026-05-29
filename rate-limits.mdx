@@ -1,6 +1,41 @@
 ---
 title: "Rate limits"
-description: "Stub page. Real content lands in a later phase."
+description: "Per-key concurrency and the server-wide concurrency budget."
 ---
 
-(placeholder)
+Kova uses **concurrency limits**, not per-minute or per-hour throttles.
+
+## Per-key limit
+
+| Tier | Per-key max in-flight | Per-minute / per-hour | Max chars per request |
+|---|---|---|---|
+| Standard (`kova_sk_`) | 10 | no throttle | no limit |
+
+If you exceed 10 in-flight requests on a single key, the 11th immediately receives a 429 — it does not queue server-side.
+
+## Server-wide semaphore
+
+The server has a single global semaphore that bounds total concurrent inference (default `MAX_CONCURRENT_TTS=15`). Under sustained heavy load — many keys saturating their per-key limit at once — requests may queue briefly even if your key is under its individual limit.
+
+In practice this is rare; the per-key limit is the binding constraint for almost all integrations.
+
+## Recommended client-side patterns
+
+<CardGroup cols={2}>
+  <Card title="Queue locally" icon="layer-group">
+    Maintain a bounded semaphore in your application matching the per-key limit. Drop or backpressure once full.
+  </Card>
+  <Card title="Retry with backoff" icon="rotate">
+    On 429, retry with exponential backoff + jitter. Start at 200ms, cap at 5s.
+  </Card>
+  <Card title="Split across keys" icon="key">
+    For higher throughput, create multiple keys (one per service / environment) — each gets its own per-key budget.
+  </Card>
+  <Card title="Reuse WebSocket" icon="plug">
+    For real-time apps, one WebSocket connection counts as one in-flight slot regardless of how many utterances you send through it.
+  </Card>
+</CardGroup>
+
+## Asking for higher limits
+
+For sustained high-volume traffic, [contact us](mailto:support@kova.ai) to discuss provisioned capacity.

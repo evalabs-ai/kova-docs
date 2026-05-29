@@ -1,6 +1,99 @@
 ---
 title: "Quickstart"
-description: "Stub page. Real content lands in a later phase."
+description: "Make your first request and save an MP3 in under 60 seconds."
 ---
 
-(placeholder)
+## 1. Get an API key
+
+Sign in at [platform.kova.ai](https://platform.kova.ai) and create a key on the [API keys page](https://platform.kova.ai/dashboard/api-keys). Keys start with `kova_sk_`.
+
+<Warning>Keep your key secret. Anyone with the key can spend your credits.</Warning>
+
+## 2. Install the SDK
+
+<CodeGroup>
+
+```sh Python
+pip install kova-tts
+```
+
+```sh Node.js
+npm install @kova-ai/tts
+```
+
+```sh cURL
+# Already on your machine.
+```
+
+</CodeGroup>
+
+## 3. Make your first request
+
+<CodeGroup>
+
+```python Python
+import os
+from kova_tts import KovaTTSClient, AudioResponseFormat
+
+client = KovaTTSClient(api_key=os.environ["KOVA_API_KEY"])
+
+result = client.tts(
+    text="Hello from Kova.",
+    voice="cal",
+    response_format=AudioResponseFormat(encoding="mp3"),
+)
+
+client.write_audio_file(result.audio, "out.mp3")
+print("wrote out.mp3")
+```
+
+```ts Node.js
+import { KovaTTSClient } from "@kova-ai/tts";
+
+const client = new KovaTTSClient({ apiKey: process.env.KOVA_API_KEY! });
+
+const result = await client.tts({
+  text: "Hello from Kova.",
+  voice: "cal",
+  response_format: { encoding: "mp3" },
+});
+
+await client.writeAudioFile(result.audio, "out.mp3");
+console.log("wrote out.mp3");
+```
+
+```bash cURL
+curl https://api.kova.ai/v1/tts \
+  -H "x-api-key: $KOVA_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{"text":"Hello from Kova.","voice":"cal","response_format":{"encoding":"mp3"}}' \
+  | jq -r .audio | base64 -d > out.mp3
+```
+
+</CodeGroup>
+
+## 4. Play it
+
+```sh
+open out.mp3   # macOS
+xdg-open out.mp3   # Linux
+```
+
+You should hear "Hello from Kova." in the **cal** voice.
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Streaming TTS" icon="bolt" href="/api-reference/http/streaming-tts">
+    Start playback before generation finishes.
+  </Card>
+  <Card title="WebSocket API" icon="plug" href="/api-reference/websocket/overview">
+    Real-time, multi-utterance voice experiences.
+  </Card>
+  <Card title="Voices" icon="microphone" href="/voices">
+    Browse all available speakers.
+  </Card>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Where keys come from and how to manage them.
+  </Card>
+</CardGroup>

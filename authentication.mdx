@@ -1,6 +1,65 @@
 ---
 title: "Authentication"
-description: "Stub page. Real content lands in a later phase."
+description: "Use the x-api-key header. Get keys from platform.kova.ai."
 ---
 
-(placeholder)
+All Kova TTS requests authenticate with an API key in the **`x-api-key`** HTTP header. Keys start with `kova_sk_`.
+
+```http
+x-api-key: kova_sk_...
+```
+
+<Note>Kova uses `x-api-key`, not `Authorization: Bearer`. Some HTTP clients case-normalize headers; either case works.</Note>
+
+## Getting a key
+
+<Steps>
+  <Step title="Sign in">
+    Open [platform.kova.ai](https://platform.kova.ai) and sign in (or sign up).
+  </Step>
+  <Step title="Open the API keys page">
+    Navigate to [Dashboard → API keys](https://platform.kova.ai/dashboard/api-keys).
+  </Step>
+  <Step title="Create a key">
+    Click **Create key**, name it (e.g. "production-backend"), and copy the key. **You can only view the full key once** — store it in your secret manager immediately.
+  </Step>
+</Steps>
+
+## Using the key
+
+<CodeGroup>
+
+```python Python
+from kova_tts import KovaTTSClient
+client = KovaTTSClient(api_key="kova_sk_...")
+```
+
+```ts Node.js
+import { KovaTTSClient } from "@kova-ai/tts";
+const client = new KovaTTSClient({ apiKey: "kova_sk_..." });
+```
+
+```bash cURL
+curl https://api.kova.ai/v1/tts \
+  -H "x-api-key: kova_sk_..." \
+  -H "content-type: application/json" \
+  -d '{"text":"...","voice":"cal"}'
+```
+
+</CodeGroup>
+
+## Security
+
+- **Never commit keys to source control.** Use environment variables or a secret manager.
+- **Rotate keys** if you suspect compromise. Old keys keep working until you delete them on the dashboard.
+- **Use one key per environment / service.** Easier to identify what's spending and to revoke selectively.
+
+## Errors
+
+| Code | Body | Cause |
+|---|---|---|
+| `401` | `{"error": "Invalid or missing API key"}` | Header missing or malformed. |
+| `401` | `{"error": "INVALID_API_KEY"}` | Header is well-formed but the key doesn't exist or was revoked. |
+| `402` | `{"error": "INSUFFICIENT_CREDITS"}` | The account has no remaining credit. Top up at [platform.kova.ai/dashboard/billing](https://platform.kova.ai/dashboard/billing). |
+
+See [Errors](/errors) for the complete reference.
