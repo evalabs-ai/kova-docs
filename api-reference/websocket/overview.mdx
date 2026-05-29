@@ -1,6 +1,76 @@
 ---
 title: "WebSocket overview"
-description: "Stub page. Real content lands in a later phase."
+description: "Multi-context, real-time TTS over a single connection."
 ---
 
-(placeholder)
+`WS /v1/tts/ws` is the recommended transport for **interactive applications** — voice agents, dialog systems, anything where text arrives incrementally over the lifetime of a session.
+
+A single WebSocket connection multiplexes multiple **contexts**. Each context represents one continuous utterance with a chosen voice and format. You can have many open contexts on one connection at once; the server tags every frame with its `context_id` so you can route audio back to the right player.
+
+```text
+┌────────────────────────────────┐
+│            client              │
+└──────────────┬─────────────────┘
+               │  WS (one connection, x-api-key header)
+┌──────────────▼─────────────────┐
+│   ┌─ context "ctx-greet"      │
+│   ├─ context "ctx-confirm"    │
+│   └─ context "ctx-followup"   │
+│                                │
+│       Kova TTS WS endpoint     │
+└────────────────────────────────┘
+```
+
+## When to use WebSocket vs streaming HTTP
+
+| Need | Use |
+|---|---|
+| One utterance, low-latency playback | [Streaming HTTP](/api-reference/http/streaming-tts) — simpler, fewer moving parts |
+| Many utterances over a session, want connection reuse | **WebSocket** |
+| Multiple parallel utterances (e.g. background music + dialog) | **WebSocket** with multiple contexts |
+| Browser client | **Streaming HTTP** — browsers can't set custom WS headers reliably |
+
+## Authentication
+
+The `x-api-key` header is sent on the WebSocket handshake (not as the first frame after connect):
+
+```http
+GET /v1/tts/ws HTTP/1.1
+Upgrade: websocket
+Host: api.kova.ai
+x-api-key: kova_sk_...
+```
+
+<Warning>Browsers cannot reliably set custom headers on a `WebSocket` constructor. Use [Streaming HTTP](/api-reference/http/streaming-tts) for browser clients, or proxy the WebSocket through a Node backend that sets the header.</Warning>
+
+## Connection lifecycle
+
+<Steps>
+  <Step title="Connect">
+    Open a WebSocket to `wss://api.kova.ai/v1/tts/ws` with `x-api-key` in the handshake.
+  </Step>
+  <Step title="Start a context">
+    Send a `start_context` frame with the voice, model, and (optionally) timestamps + response_format. The server replies with `context_started`.
+  </Step>
+  <Step title="Send text">
+    Send one or more `send_text` frames. The server generates audio incrementally and emits `audio_chunk` frames (plus `timestamps` if enabled).
+  </Step>
+  <Step title="Flush">
+    Send a `flush` frame to mark the end of the current utterance. The server finishes any in-progress generation and emits `flush_completed`.
+  </Step>
+  <Step title="Close the context">
+    Send `close_context` to release server resources for that context. The server emits `context_closed`. The WebSocket itself stays open.
+  </Step>
+  <Step title="Disconnect">
+    Close the WebSocket when you're done. Or keep it open for further contexts.
+  </Step>
+</Steps>
+
+## Audio format
+
+WebSocket `audio_chunk` values are base64-encoded **little-endian 16-bit PCM at 32 kHz mono** by default. You can override per-context by passing `response_format` to `start_context` — same shape as the HTTP request.
+
+## Next
+
+- [Frame reference](/api-reference/websocket/frames) — every client + server frame with shapes.
+- [Example: streaming a long document](/api-reference/websocket/examples/streaming-long-doc) — concrete end-to-end walkthrough.

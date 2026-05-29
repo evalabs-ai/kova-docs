@@ -1,6 +1,159 @@
 ---
 title: "JavaScript / TypeScript SDK"
-description: "Stub page. Real content lands in a later phase."
+description: "Official JavaScript/TypeScript client for the Kova TTS API."
 ---
 
-(placeholder)
+`@kova-ai/tts` is the official JavaScript/TypeScript client. Works in Node 18+. Source: [github.com/evalabs-ai/kova-tts-clients](https://github.com/evalabs-ai/kova-tts-clients).
+
+<Warning>The WebSocket helper requires a Node runtime — browsers cannot reliably set the `x-api-key` handshake header. Use [Streaming HTTP](/api-reference/http/streaming-tts) for browser clients, or proxy the WebSocket through a Node backend.</Warning>
+
+## Install
+
+```sh
+npm install @kova-ai/tts
+```
+
+## Initialize
+
+```ts
+import { KovaTTSClient } from "@kova-ai/tts";
+
+const client = new KovaTTSClient({
+  apiKey: process.env.KOVA_API_KEY!,
+});
+```
+
+By default the client targets `https://api.kova.ai/v1/tts`. Override `baseUrl` for staging or self-hosting:
+
+```ts
+const client = new KovaTTSClient({
+  apiKey: process.env.KOVA_API_KEY!,
+  baseUrl: "https://staging.api.kova.ai/v1/tts",
+});
+```
+
+## Sync TTS
+
+```ts
+const result = await client.tts({
+  text: "Hello world.",
+  voice: "cal",
+  response_format: { encoding: "mp3" },
+  timestamps: true,
+});
+
+await client.writeAudioFile(result.audio, "out.mp3");
+console.log(result.timestamps?.words);
+```
+
+`result.audio` is the **decoded** audio bytes (`Uint8Array`), not base64.
+
+## Streaming TTS
+
+`streamTTS` returns an async iterable of events:
+
+```ts
+for await (const event of client.streamTTS({
+  text: "Hello world.",
+  voice: "cal",
+  response_format: { encoding: "mp3" },
+  timestamps: true,
+})) {
+  switch (event.type) {
+    case "audio":
+      console.log(`audio: ${event.audio.byteLength} bytes`);
+      break;
+    case "timestamps":
+      console.log(event.words);
+      break;
+  }
+}
+```
+
+## WebSocket
+
+```ts
+import { KovaTTSClient, pcm16ToWavBytes } from "@kova-ai/tts";
+import { writeFile } from "node:fs/promises";
+
+const client = new KovaTTSClient({ apiKey: process.env.KOVA_API_KEY! });
+const sampleRate = 32000;
+const pcmChunks: Uint8Array[] = [];
+
+const ws = await client.connectWebSocket();
+
+await ws.startContext({
+  contextId: "ctx-1",
+  voiceId: "cal",
+  modelId: "default",
+  responseFormat: { encoding: "pcm", sample_rate: sampleRate },
+});
+
+await ws.sendText("ctx-1", "Hello ");
+await ws.sendText("ctx-1", "world.");
+await ws.flush("ctx-1", "end");
+
+for await (const frame of ws) {
+  if (frame.type === "audio") {
+    pcmChunks.push(frame.audio);
+  } else if (frame.type === "flush_completed" && frame.flush_id === "end") {
+    break;
+  }
+}
+
+await ws.closeContext("ctx-1");
+ws.close();
+
+const merged = concat(pcmChunks);
+const wavBytes = pcm16ToWavBytes(merged, { sampleRate });
+await writeFile("out.wav", wavBytes);
+
+function concat(chunks: Uint8Array[]): Uint8Array {
+  const total = chunks.reduce((n, c) => n + c.byteLength, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) { out.set(c, offset); offset += c.byteLength; }
+  return out;
+}
+```
+
+## Helpers
+
+| Symbol | What it does |
+|---|---|
+| `client.writeAudioFile(audio, path)` | Write decoded audio bytes to disk. |
+| `decodeBase64ToBytes(value)` | Top-level — decode a base64 string to `Uint8Array`. |
+| `decodePcm16LeBase64(value)` | Top-level — decode a base64 PCM16-LE chunk to `Int16Array`. |
+| `pcm16ToWavBytes(pcm, { sampleRate, channels? })` | Top-level — wrap raw int16 PCM in a WAV header. Returns `Uint8Array` you write yourself with `node:fs/promises`. |
+
+For listing voices, use raw HTTP — the SDK does not currently expose a `listVoices` method:
+
+```ts
+const resp = await fetch("https://api.kova.ai/v1/tts/speakers", {
+  headers: { "x-api-key": process.env.KOVA_API_KEY! },
+});
+const { speaker_ids } = await resp.json();
+```
+
+## Errors
+
+The SDK throws a `KovaTTSError` on non-2xx responses. The error carries the HTTP status and the parsed JSON body:
+
+```ts
+import { KovaTTSClient, KovaTTSError } from "@kova-ai/tts";
+
+try {
+  await client.tts({ text: "hi", voice: "bad-voice" });
+} catch (e) {
+  if (e instanceof KovaTTSError) {
+    console.log(e.statusCode, e.body);
+  }
+}
+```
+
+See [Errors](/errors) for the full status-code reference.
+
+## See also
+
+- [Python SDK](/sdks/python)
+- Source: [github.com/evalabs-ai/kova-tts-clients/tree/main/packages/js](https://github.com/evalabs-ai/kova-tts-clients/tree/main/packages/js)

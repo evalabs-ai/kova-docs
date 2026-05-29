@@ -1,6 +1,183 @@
 ---
 title: "WebSocket frames"
-description: "Stub page. Real content lands in a later phase."
+description: "Every client and server frame with field shapes and examples."
 ---
 
-(placeholder)
+Frames are JSON objects sent as WebSocket text messages. The presence of a discriminator field (e.g. `start_context`, `send_text`, `audio_chunk`) identifies the frame type.
+
+## Client → Server frames
+
+### start_context
+
+Opens a new context. Replies with `context_started`.
+
+```ts
+type StartContext = {
+  start_context: {
+    voice_id: string;
+    model_id: string;
+    temperature?: number | null;
+    timestamps?: boolean;                                          // default false
+    response_format?: {
+      encoding: "mp3" | "pcm" | "wav" | "linear16" | "opus" | "mulaw" | "alaw";
+      sample_rate?: number;
+      bitrate?: string | number;
+    };
+  };
+  context_id?: string | null;                                       // your id; echoed on all frames
+};
+```
+
+Example:
+
+```json
+{
+  "start_context": {
+    "voice_id": "cal",
+    "model_id": "default",
+    "timestamps": true,
+    "response_format": {"encoding": "pcm", "sample_rate": 32000}
+  },
+  "context_id": "ctx-greet"
+}
+```
+
+### send_text
+
+Add text to an open context. The server starts generating audio for it incrementally.
+
+```ts
+type SendText = {
+  send_text: string;
+  context_id?: string | null;
+};
+```
+
+```json
+{"send_text": "Welcome to Kova. ", "context_id": "ctx-greet"}
+```
+
+### flush
+
+Mark the end of the current utterance. The server finishes any in-progress generation and emits `flush_completed`.
+
+```ts
+type Flush = {
+  flush: true;
+  context_id?: string | null;
+  flush_id?: string | null;     // optional; echoed on flush_completed
+};
+```
+
+```json
+{"flush": true, "context_id": "ctx-greet", "flush_id": "f1"}
+```
+
+### close_context
+
+Release server resources for a context. The WebSocket itself stays open.
+
+```ts
+type CloseContext = {
+  close_context: true;
+  context_id?: string | null;
+};
+```
+
+## Server → Client frames
+
+### context_started
+
+Echoed by the server after a successful `start_context`.
+
+```ts
+type ContextStarted = {
+  context_started: {
+    voice_id: string;
+    model_id: string;
+    temperature?: number | null;
+    timestamps?: boolean;
+    response_format?: object;
+  };
+  context_id?: string | null;
+};
+```
+
+### audio_chunk
+
+Audio bytes for a context.
+
+```ts
+type AudioChunk = {
+  audio_chunk: string;          // base64-encoded
+  context_id?: string | null;
+};
+```
+
+**Default encoding when no `response_format` is set:** base64-encoded little-endian int16 PCM at 32 kHz mono.
+
+### timestamps
+
+Word timing for a context (only when the context was started with `timestamps: true`).
+
+```ts
+type Timestamps = {
+  timestamps: {
+    words: string[];
+    start_seconds: number[];
+    end_seconds: number[];
+  };
+  context_id?: string | null;
+};
+```
+
+### flush_completed
+
+Emitted after every `audio_chunk` for the flushed utterance has been sent.
+
+```ts
+type FlushCompleted = {
+  flush_completed: true;
+  flush_id: string;
+  context_id?: string | null;
+};
+```
+
+### context_closed
+
+Confirmation that a context has been released.
+
+```ts
+type ContextClosed = {
+  context_closed: true;
+  context_id?: string | null;
+};
+```
+
+### error
+
+Server-side error for a specific context or flush. The WebSocket stays open; you can continue with other contexts.
+
+```ts
+type ErrorFrame = {
+  error: string;
+  context_id?: string | null;
+  flush_id?: string | null;
+};
+```
+
+## Frame ordering
+
+Within a single `context_id`:
+
+1. `context_started` arrives before any `audio_chunk` or `timestamps`.
+2. `audio_chunk` and `timestamps` interleave during generation.
+3. `flush_completed` arrives after the last `audio_chunk` for the flushed utterance.
+4. `context_closed` arrives last.
+
+Frames from different contexts can interleave freely. Use `context_id` to demultiplex on the client.
+
+## See also
+
+- [Example: streaming a long document](/api-reference/websocket/examples/streaming-long-doc) — end-to-end walkthrough.
+- [Overview](/api-reference/websocket/overview) — lifecycle, browser caveat, authentication.

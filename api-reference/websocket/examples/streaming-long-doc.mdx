@@ -1,6 +1,147 @@
 ---
-title: "Streaming a long document"
-description: "Stub page. Real content lands in a later phase."
+title: "Example: streaming a long document"
+description: "End-to-end walkthrough: feed a document to one WebSocket context and assemble the audio."
 ---
 
-(placeholder)
+This walkthrough shows feeding sentences from a long document into a single WebSocket context, receiving PCM audio chunks as they're generated, and writing the result to a single WAV file at the end.
+
+## Setup
+
+Install the SDK and have `KOVA_API_KEY` set in your environment.
+
+<CodeGroup>
+
+```sh Python
+pip install kova-tts
+export KOVA_API_KEY=kova_sk_...
+```
+
+```sh Node.js
+npm install @kova-ai/tts
+export KOVA_API_KEY=kova_sk_...
+```
+
+</CodeGroup>
+
+## Example
+
+<CodeGroup>
+
+```python Python
+import asyncio, os
+from kova_tts import KovaTTSClient, AudioResponseFormat
+
+DOCUMENT = """
+Welcome to Kova.
+This is the second sentence.
+And here is one more, just to round things out.
+""".strip().splitlines()
+
+
+async def main():
+    client = KovaTTSClient(api_key=os.environ["KOVA_API_KEY"])
+    sample_rate = 32000
+    pcm_chunks: list[bytes] = []
+
+    async with client.websocket() as ws:
+        await ws.start_context(
+            context_id="doc",
+            voice_id="cal",
+            model_id="default",
+            response_format=AudioResponseFormat(encoding="pcm", sample_rate=sample_rate),
+        )
+
+        for line in DOCUMENT:
+            await ws.send_text(line + " ", context_id="doc")
+
+        await ws.flush(context_id="doc", flush_id="end")
+
+        async for frame in ws:
+            if frame.type == "audio":
+                pcm_chunks.append(frame.audio)
+            elif frame.type == "flush_completed" and frame.flush_id == "end":
+                break
+
+        await ws.close_context(context_id="doc")
+
+    # The SDK does not currently expose a WAV-writing helper.
+    # Use stdlib `wave` to write a 16-bit mono WAV.
+    import wave
+    with wave.open("doc.wav", "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)         # 16-bit PCM
+        wf.setframerate(sample_rate)
+        wf.writeframes(b"".join(pcm_chunks))
+    print(f"wrote doc.wav ({sum(len(c) for c in pcm_chunks)} pcm bytes)")
+
+
+asyncio.run(main())
+```
+
+```ts Node.js
+import { KovaTTSClient, pcm16ToWavBytes } from "@kova-ai/tts";
+import { writeFile } from "node:fs/promises";
+
+const DOCUMENT = [
+  "Welcome to Kova.",
+  "This is the second sentence.",
+  "And here is one more, just to round things out.",
+];
+
+const client = new KovaTTSClient({ apiKey: process.env.KOVA_API_KEY! });
+const sampleRate = 32000;
+const pcmChunks: Uint8Array[] = [];
+
+const ws = await client.connectWebSocket();
+
+await ws.startContext({
+  contextId: "doc",
+  voiceId: "cal",
+  modelId: "default",
+  responseFormat: { encoding: "pcm", sample_rate: sampleRate },
+});
+
+for (const line of DOCUMENT) {
+  await ws.sendText("doc", line + " ");
+}
+
+await ws.flush("doc", "end");
+
+for await (const frame of ws) {
+  if (frame.type === "audio") {
+    pcmChunks.push(frame.audio);
+  } else if (frame.type === "flush_completed" && frame.flush_id === "end") {
+    break;
+  }
+}
+
+await ws.closeContext("doc");
+ws.close();
+
+const total = pcmChunks.reduce((n, c) => n + c.byteLength, 0);
+const merged = new Uint8Array(total);
+let offset = 0;
+for (const c of pcmChunks) { merged.set(c, offset); offset += c.byteLength; }
+
+// The SDK does not currently expose a WAV-writing helper on the client.
+// Use the exported `pcm16ToWavBytes` primitive + node:fs to write the file.
+const wavBytes = pcm16ToWavBytes(merged, { sampleRate });
+await writeFile("doc.wav", wavBytes);
+console.log(`wrote doc.wav (${total} pcm bytes)`);
+```
+
+</CodeGroup>
+
+## What's happening
+
+1. **Open one context** for the whole document. Reusing a context means the voice and format stay consistent across the entire output, with no warm-up overhead between sentences.
+2. **Send each sentence as a separate `send_text` frame** with trailing whitespace so the model treats them as sequential prose, not concatenated tokens.
+3. **Audio streams back incrementally** — by the time you've sent the third sentence, audio for the first is already arriving.
+4. **`flush` with a sentinel `flush_id`** lets you know when the server has finished generating the last sentence (you wait for the matching `flush_completed`).
+5. **Assemble PCM and write a single WAV file** at the end. Python uses stdlib `wave`; JS uses the exported `pcm16ToWavBytes` primitive + `node:fs`. The SDKs don't currently ship a higher-level `writePcm16WavFile` helper — if one is added later, this page should be updated to prefer it.
+
+## Variations
+
+- **Multiple parallel contexts:** open `ctx-narration` and `ctx-sfx` concurrently with different voices. Demultiplex `audio_chunk` by `context_id` on the client.
+- **Different output format:** swap `encoding: "pcm"` for `encoding: "mp3"` and skip the WAV-header step.
+- **Without timestamps:** omit `timestamps: true` from `start_context` to skip word-timing frames.

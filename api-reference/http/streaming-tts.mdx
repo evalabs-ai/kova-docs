@@ -1,6 +1,137 @@
 ---
 title: "Streaming TTS"
-description: "Stub page. Real content lands in a later phase."
+description: "Start playback before generation finishes. SSE-style data records."
+openapi: "POST /v1/tts/stream"
 ---
 
-(placeholder)
+`POST /v1/tts/stream` returns a `text/plain` body of SSE-style records — one JSON object per `data:` line, separated by blank lines. The request body is identical to [Text to speech](/api-reference/http/text-to-speech). Use streaming when you want to start playback before generation finishes.
+
+<Note>The default response encoding is **mp3**, not raw PCM. Each `audio_chunk` value is base64-encoded audio in your chosen `response_format`; concatenate the chunks to reconstruct the file.</Note>
+
+## Event stream format
+
+The response body is a sequence of records:
+
+```text
+data: {"type":"audio","audio_chunk":"<base64>"}
+
+data: {"type":"audio","audio_chunk":"<base64>"}
+
+data: {"type":"timestamps","words":["hello"],"start_seconds":[0.0],"end_seconds":[0.3]}
+
+data: {"type":"audio","audio_chunk":"<base64>"}
+```
+
+Each record:
+1. Starts with `data: ` (note the space).
+2. Contains one JSON object.
+3. Ends with `\n\n` (two newlines).
+
+There is no terminating `data: [DONE]` — the stream ends when the HTTP body ends.
+
+## Event types
+
+### audio
+
+```ts
+type AudioEvent = {
+  type: "audio";
+  audio_chunk: string;  // base64-encoded audio bytes in your response_format
+};
+```
+
+### timestamps (only when `timestamps: true`)
+
+```ts
+type TimestampsEvent = {
+  type: "timestamps";
+  words: string[];
+  start_seconds: number[];
+  end_seconds: number[];
+};
+```
+
+The three arrays are parallel — `words[i]` starts at `start_seconds[i]` and ends at `end_seconds[i]`.
+
+## Examples
+
+<CodeGroup>
+
+```python Python
+import asyncio, os
+from kova_tts import KovaTTSClient, AudioResponseFormat
+
+async def main():
+    client = KovaTTSClient(api_key=os.environ["KOVA_API_KEY"])
+    audio_bytes = bytearray()
+    async for event in client.stream_tts(
+        text="This is streaming TTS from Kova.",
+        voice="cal",
+        response_format=AudioResponseFormat(encoding="mp3"),
+        timestamps=True,
+    ):
+        if event.type == "audio":
+            audio_bytes.extend(event.audio)
+            print(f"audio: {len(event.audio)} bytes")
+        elif event.type == "timestamps":
+            print(f"words: {event.words}")
+
+    with open("stream.mp3", "wb") as f:
+        f.write(audio_bytes)
+
+asyncio.run(main())
+```
+
+```ts Node.js
+import { KovaTTSClient } from "@kova-ai/tts";
+import { writeFile } from "node:fs/promises";
+
+const client = new KovaTTSClient({ apiKey: process.env.KOVA_API_KEY! });
+const chunks: Uint8Array[] = [];
+
+for await (const event of client.streamTTS({
+  text: "This is streaming TTS from Kova.",
+  voice: "cal",
+  response_format: { encoding: "mp3" },
+  timestamps: true,
+})) {
+  switch (event.type) {
+    case "audio":
+      chunks.push(event.audio);
+      console.log(`audio: ${event.audio.byteLength} bytes`);
+      break;
+    case "timestamps":
+      console.log("words:", event.words);
+      break;
+  }
+}
+
+const total = chunks.reduce((n, c) => n + c.byteLength, 0);
+const out = new Uint8Array(total);
+let offset = 0;
+for (const c of chunks) { out.set(c, offset); offset += c.byteLength; }
+await writeFile("stream.mp3", out);
+```
+
+```bash cURL
+curl -N https://api.kova.ai/v1/tts/stream \
+  -H "x-api-key: $KOVA_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{
+    "text": "This is streaming TTS from Kova.",
+    "voice": "cal",
+    "response_format": {"encoding": "mp3"},
+    "timestamps": true
+  }'
+# Each line of output is `data: {json}` followed by a blank line.
+# Parse each JSON, base64-decode `audio_chunk`, concatenate to reconstruct the file.
+```
+
+</CodeGroup>
+
+<Warning>**linear16 streaming caveat:** `linear16` re-emits a WAV header on every chunk. If you need raw streaming PCM, use `encoding: "pcm"` and assemble your own header at the end.</Warning>
+
+## See also
+
+- [WebSocket API](/api-reference/websocket/overview) — for multi-utterance, interactive use cases.
+- [Text to speech](/api-reference/http/text-to-speech) — same request body, single audio response.

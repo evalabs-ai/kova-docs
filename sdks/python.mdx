@@ -1,6 +1,155 @@
 ---
 title: "Python SDK"
-description: "Stub page. Real content lands in a later phase."
+description: "Official Python client for the Kova TTS API."
 ---
 
-(placeholder)
+`kova-tts` is the official Python client for the Kova TTS API. Source: [github.com/evalabs-ai/kova-tts-clients](https://github.com/evalabs-ai/kova-tts-clients).
+
+## Install
+
+```sh
+pip install kova-tts
+```
+
+Requires Python 3.10+.
+
+## Initialize
+
+```python
+import os
+from kova_tts import KovaTTSClient
+
+client = KovaTTSClient(api_key=os.environ["KOVA_API_KEY"])
+```
+
+By default the client targets `https://api.kova.ai/v1/tts`. Override `base_url` for staging or self-hosting:
+
+```python
+client = KovaTTSClient(
+    api_key=os.environ["KOVA_API_KEY"],
+    base_url="https://staging.api.kova.ai/v1/tts",
+)
+```
+
+## Sync TTS
+
+```python
+from kova_tts import AudioResponseFormat
+
+result = client.tts(
+    text="Hello world.",
+    voice="cal",
+    response_format=AudioResponseFormat(encoding="mp3"),
+    timestamps=True,
+)
+
+client.write_audio_file(result.audio, "out.mp3")
+if result.timestamps:
+    print(result.timestamps.words)
+```
+
+`result.audio` is the **decoded** audio bytes (`bytes`), not base64.
+
+## Streaming TTS
+
+`stream_tts` returns an async iterator of events:
+
+```python
+import asyncio
+from kova_tts import AudioResponseFormat
+
+async def main():
+    async for event in client.stream_tts(
+        text="Hello world.",
+        voice="cal",
+        response_format=AudioResponseFormat(encoding="mp3"),
+        timestamps=True,
+    ):
+        if event.type == "audio":
+            # event.audio is decoded bytes for this chunk
+            print(f"audio: {len(event.audio)} bytes")
+        elif event.type == "timestamps":
+            print(event.words)
+
+asyncio.run(main())
+```
+
+## WebSocket
+
+```python
+import asyncio
+from kova_tts import AudioResponseFormat
+
+async def main():
+    async with client.websocket() as ws:
+        await ws.start_context(
+            context_id="ctx-1",
+            voice_id="cal",
+            model_id="default",
+            response_format=AudioResponseFormat(encoding="pcm", sample_rate=32000),
+        )
+        await ws.send_text("Hello ", context_id="ctx-1")
+        await ws.send_text("world.", context_id="ctx-1")
+        await ws.flush(context_id="ctx-1", flush_id="end")
+
+        async for frame in ws:
+            if frame.type == "audio":
+                print(f"pcm: {len(frame.audio)} bytes")
+            elif frame.type == "timestamps":
+                print(frame.timestamps.words)
+            elif frame.type == "flush_completed" and frame.flush_id == "end":
+                break
+
+        await ws.close_context(context_id="ctx-1")
+
+asyncio.run(main())
+```
+
+## Helpers
+
+| Symbol | What it does |
+|---|---|
+| `client.write_audio_file(audio, path)` | Write decoded audio bytes to disk (mp3, wav, opus, etc. — the encoded file format). |
+| `client.decode_base64_bytes(value)` | Decode a base64 string to raw bytes. Useful if you're handling stream events manually. |
+| `client.decode_pcm16le_base64(value)` | Decode a base64-encoded PCM16-LE chunk to a `list[int]` of samples. |
+| `kova_tts.write_audio_file(audio, path)` | Top-level convenience function — same as the method. |
+
+For raw PCM → WAV file conversion (used in the WebSocket example), use stdlib `wave`:
+
+```python
+import wave
+with wave.open("out.wav", "wb") as wf:
+    wf.setnchannels(1)
+    wf.setsampwidth(2)
+    wf.setframerate(32000)
+    wf.writeframes(pcm_bytes)
+```
+
+For listing voices, use raw HTTP — the SDK does not currently expose a `list_voices` method:
+
+```python
+import httpx, os
+resp = httpx.get("https://api.kova.ai/v1/tts/speakers",
+                 headers={"x-api-key": os.environ["KOVA_API_KEY"]})
+print(resp.json()["speaker_ids"])
+```
+
+## Errors
+
+The SDK raises a subclass of `KovaTTSError` on non-2xx responses. The exception carries the HTTP status and the parsed JSON body:
+
+```python
+from kova_tts import KovaTTSClient, KovaTTSError
+
+try:
+    result = client.tts(text="hi", voice="bad-voice")
+except KovaTTSError as e:
+    print(e.status_code, e.body)  # e.g. 422 {'detail': [...]}
+```
+
+See [Errors](/errors) for the full status-code reference.
+
+## See also
+
+- [JavaScript / TypeScript SDK](/sdks/javascript)
+- Source: [github.com/evalabs-ai/kova-tts-clients/tree/main/packages/python](https://github.com/evalabs-ai/kova-tts-clients/tree/main/packages/python)
